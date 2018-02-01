@@ -1,0 +1,5 @@
+For this homework, I've placed 3 objects in the scene for part A. The left one has a texture and interacts with light; the middle one looks striped based on the shader's code; the left one doesn't react to light, and just changes its on-screen color.
+
+For part B, the user can blend the image's color toward red or blue. Not all pixels change the color by the same amount though. I intended it to change more if it's closer to the edges, and change less if it's closer to the center. However, the center appears to be on the left in the end result.
+
+For part C, this is a game of life animation with custom rules. For each pixel, I get its "dominant color", based on which of its R, G, B has the highest value. Then, I count the neighbors with different dominant colors. Finally, I mix the center pixel's color to either absolute R, G, or B, based on whichever has the most pixels as its dominant color. The end result is too short-lived, and always ends on blue. The rule can be improved in the future.
