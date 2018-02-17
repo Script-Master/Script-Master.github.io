@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Homework1B</title>
+		<meta charset="utf-8">
+		<style>
+			body {
+			  	margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+<body>
+
+<div id="container"></div>
+
+<script src="js/three.js"></script>
+<script src="js/OrbitControls.js"></script>
+
+<script id="terrainVS" type="x-shader/x-vertex">
+
+uniform mat4 projectionMatrix;
+uniform mat4 modelViewMatrix;
+
+uniform sampler2D heightMap;
+
+attribute vec3 position;
+attribute vec2 uv;
+attribute vec3 normal;
+
+varying vec2 vUv;
+
+void main() {
+
+	vUv = uv;
+	
+	// Displacement
+	
+	// Take the average of RGB as height.
+	float height = ( texture2D( heightMap, uv ).r + texture2D( heightMap, uv ).g + texture2D( heightMap, uv ).b ) / 3.0;
+	
+	// Extrude along the normal.
+	vec3 displacedPos = position + normal * height;
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( displacedPos, 1.0 );
+
+}
+
+</script>
+
+<script id="terrainFS" type="x-shader/x-fragment">
+
+precision mediump float;
+
+uniform sampler2D heightMap;
+
+varying vec2 vUv;
+
+void main() {
+
+	gl_FragColor = texture2D( heightMap,vUv );
+
+}
+
+</script>
+
+<script>
+
+// Essentials
+
+var container;
+
+var camera, scene, renderer;
+
+var terrainVS = document.getElementById( "terrainVS" ).textContent;
+var terrainFS = document.getElementById( "terrainFS" ).textContent;
+
+// Scene elements
+
+var mesh;
+var material;
+
+init();
+animate();
+
+function init() {
+
+	// Essentials
+
+	container = document.getElementById( "container" );
+	
+	camera = new THREE.PerspectiveCamera( 60.0, window.innerWidth / window.innerHeight, 0.1, 50);
+	camera.position.z = 5;
+	
+	scene = new THREE.Scene();
+	
+	renderer = new THREE.WebGLRenderer();
+	renderer.setClearColor( 0x003366 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	container.appendChild( renderer.domElement );
+	
+	// Orbit control
+	var controls = new THREE.OrbitControls( camera );
+	controls.update();
+	
+	// Geometry
+	
+	var terrainGeometry = new THREE.PlaneGeometry( 5, 5, 300, 300 );
+	
+	// Material
+	
+	var heightMapTexture = new THREE.TextureLoader().load( "Textures/HeightMap.png" );
+	
+	var terrainMaterial = new THREE.RawShaderMaterial( {
+	
+		uniforms: {
+		
+			heightMap: { type: 't', value: heightMapTexture },
+		
+		},
+		
+		vertexShader: terrainVS,
+		fragmentShader: terrainFS
+	
+	} )
+	
+	// Mesh
+	
+	var terrainMesh = new THREE.Mesh( terrainGeometry, terrainMaterial );
+	terrainMesh.material.side = THREE.DoubleSide;
+	
+	// Scene
+	
+	scene.add( terrainMesh );
+	
+}
+
+function animate() {
+
+	requestAnimationFrame( animate );
+	
+	render();
+
+}
+
+function render() {
+
+	renderer.render( scene, camera );
+
+}
+
+</script>
+
+</body>
+</html>
