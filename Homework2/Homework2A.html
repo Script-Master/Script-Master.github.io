@@ -17,12 +17,14 @@
 <script src="js/three.js"></script>
 <script src="js/OrbitControls.js"></script>
 
+<!-- Terrain shaders -->
+
 <script id="terrainVS" type="x-shader/x-vertex">
 
 uniform mat4 projectionMatrix;
 uniform mat4 modelViewMatrix;
 
-uniform sampler2D heightMap;
+uniform sampler2D heightmap;
 
 attribute vec3 position;
 attribute vec2 uv;
@@ -37,7 +39,7 @@ void main() {
 	// Displacement
 	
 	// Take the average of RGB as height.
-	float height = ( texture2D( heightMap, uv ).r + texture2D( heightMap, uv ).g + texture2D( heightMap, uv ).b ) / 3.0;
+	float height = ( texture2D( heightmap, uv ).r + texture2D( heightmap, uv ).g + texture2D( heightmap, uv ).b ) / 3.0;
 	
 	// Extrude along the normal.
 	vec3 displacedPos = position + normal * height;
@@ -52,13 +54,52 @@ void main() {
 
 precision mediump float;
 
-uniform sampler2D heightMap;
+uniform sampler2D heightmap;
 
 varying vec2 vUv;
 
 void main() {
 
-	gl_FragColor = texture2D( heightMap,vUv );
+	gl_FragColor = texture2D( heightmap,vUv );
+
+}
+
+</script>
+
+<!-- Sky shaders -->
+
+<script id="skyVS" type="x-shader/x-fragment">
+
+uniform mat4 projectionMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 modelMatrix;
+
+attribute vec3 position;
+
+varying vec3 vWorldPosition;
+
+void main() {
+
+	vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+	vWorldPosition = worldPosition.xyz;
+	
+	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4( position, 1.0 );
+
+}
+
+</script>
+
+<script id="skyFS" type="x-shader/x-fragment">
+
+precision mediump float;
+
+uniform samplerCube cubemap;
+
+varying vec3 vWorldPosition;
+
+void main() {
+
+	gl_FragColor = textureCube( cubemap, vWorldPosition );
 
 }
 
@@ -74,6 +115,8 @@ var camera, scene, renderer;
 
 var terrainVS = document.getElementById( "terrainVS" ).textContent;
 var terrainFS = document.getElementById( "terrainFS" ).textContent;
+var skyVS = document.getElementById( "skyVS" ).textContent;
+var skyFS = document.getElementById( "skyFS" ).textContent;
 
 // Scene elements
 
@@ -89,7 +132,7 @@ function init() {
 
 	container = document.getElementById( "container" );
 	
-	camera = new THREE.PerspectiveCamera( 60.0, window.innerWidth / window.innerHeight, 0.1, 50);
+	camera = new THREE.PerspectiveCamera( 60.0, window.innerWidth / window.innerHeight, 0.1, 2000 );
 	camera.position.z = 5;
 	
 	scene = new THREE.Scene();
@@ -103,36 +146,85 @@ function init() {
 	var controls = new THREE.OrbitControls( camera );
 	controls.update();
 	
+	addTerrain();
+	
+	addSky();
+	
+}
+
+function addTerrain()  {
+
 	// Geometry
 	
 	var terrainGeometry = new THREE.PlaneGeometry( 5, 5, 300, 300 );
 	
 	// Material
 	
-	var heightMapTexture = new THREE.TextureLoader().load( "Textures/HeightMap.png" );
+	var heightmapTexture = new THREE.TextureLoader().load( "Textures/Heightmap.png" );
 	
-	var terrainMaterial = new THREE.RawShaderMaterial( {
+	var terrainMaterial = new THREE.RawShaderMaterial(  {
 	
 		uniforms: {
 		
-			heightMap: { type: 't', value: heightMapTexture },
+			heightmap: { type: 't', value: heightmapTexture },
 		
 		},
 		
 		vertexShader: terrainVS,
 		fragmentShader: terrainFS
 	
-	} )
+	}  )
 	
 	// Mesh
 	
 	var terrainMesh = new THREE.Mesh( terrainGeometry, terrainMaterial );
 	terrainMesh.material.side = THREE.DoubleSide;
 	
-	// Scene
-	
 	scene.add( terrainMesh );
+
+}
+
+function addSky() {
+
+	// Geometry
 	
+	var skyGeometry = new THREE.BoxGeometry( 2000, 2000, 2000 );
+	
+	// Material
+	
+	var cubemapTexture = new THREE.CubeTextureLoader().setPath( "./Cubemaps/" ).load(  [
+	
+		'posx.jpg',
+		'negx.jpg',
+		'posy.jpg',
+		'negy.jpg',
+		'posz.jpg',
+		'negz.jpg'
+	
+	]  )
+	
+	var skyMaterial = new THREE.RawShaderMaterial(  {
+	
+		uniforms: {
+		
+			cubemap: { type: 't', value: cubemapTexture }
+		
+		},
+		
+		vertexShader: skyVS,
+		fragmentShader: skyFS
+	
+	}  )
+	
+	skyMaterial.depthWrite = false;
+	skyMaterial.side = THREE.BackSide;
+	
+	// Mesh
+	
+	var skyMesh = new THREE.Mesh( skyGeometry, skyMaterial );
+	
+	scene.add( skyMesh );
+
 }
 
 function animate() {
