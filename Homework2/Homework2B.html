@@ -19,28 +19,52 @@
 <script src="js/dat.gui.min.js"></script>
 <script src="js/GPUParticleSystem.js"></script>
 
-<script id="terrainVS" type="x-shader/x-vertex">
+<script id="bumpVS" type="x-shader/x-vertex">
 
 uniform mat4 projectionMatrix;
 uniform mat4 modelViewMatrix;
 
+uniform sampler2D heightmap;
+
+uniform float timer;
+
 attribute vec3 position;
 
-void main() {
+attribute vec3 normal;
+attribute vec2 uv;
 
-	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+void main() {
+	
+	float bumpStrength = 0.2;
+	
+	float noiseValue = ( texture2D( heightmap, uv ).r + texture2D( heightmap, uv ).g + texture2D( heightmap, uv ).b ) / 3.0;
+	
+	vec3 displacedPos = vec3( 0.0, 0.0, 0.0 );
+	
+	if ( ( sin( timer ) + 1.0 ) / 2.0 - noiseValue < 0.5 ) {
+	
+		displacedPos = position + normal * bumpStrength * noiseValue;
+	
+	}
+	else {
+	
+		displacedPos = position - normal * bumpStrength * noiseValue;
+	
+	}
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( displacedPos, 1.0 );
 
 }
 
 </script>
 
-<script id="terrainFS" type="x-shader/x-fragment">
+<script id="bumpFS" type="x-shader/x-fragment">
 
 precision mediump float;
 
 void main() {
 
-	
+	gl_FragColor = vec4( 0.02, 0.6, 0.9, 1.0 );
 
 }
 
@@ -54,8 +78,8 @@ var container;
 
 var camera, scene, renderer;
 
-var terrainVS = document.getElementById( "terrainVS" ).textContent;
-var terrainFS = document.getElementById( "terrainFS" ).textContent;
+var bumpVS = document.getElementById( "bumpVS" ).textContent;
+var bumpFS = document.getElementById( "bumpFS" ).textContent;
 
 // Scene elements
 
@@ -69,6 +93,13 @@ var options, spawnerOptions;
 
 var clock = new THREE.Clock();
 var tick = 0;
+
+// Global timer
+var timer = 0.0;
+
+// Box mesh has to be global.
+var planeMesh;
+var movePlane;
 
 init();
 animate();
@@ -139,9 +170,56 @@ function init() {
 	gui.add( spawnerOptions, "timeScale", -1, 1 );*/
 	
 	// Add a button to trigger the explosion.
-	var button = { trigger:function() { spawnerOptions.spawnRate = 0; } }
+	
+	var button = { trigger:function() {
+	
+		spawnerOptions.spawnRate = 0;
+	
+		movePlane = true;
+	
+	} }
+	
 	gui.add( button, "trigger" ).name( "Trigger" );
 	
+	// Add objects to the scene.
+	
+	addPlane();
+	
+}
+
+function addPlane() {
+
+	// Geometry
+	var planeGeometry = new THREE.PlaneBufferGeometry( 5, 5, 1000, 1000 );
+	
+	// Material
+	
+	var heightmapTexture = new THREE.TextureLoader().load( "Textures/perlin-512.png" );
+	
+	var planeMaterial = new THREE.RawShaderMaterial( {
+	
+		uniforms: {
+		
+			heightmap: { type: 't', value: heightmapTexture },
+			
+			timer: { type: 'f', value: 0.0 }
+		
+		},
+		
+		vertexShader: bumpVS,
+		fragmentShader: bumpFS
+	
+	} )
+	
+	// Mesh
+	planeMesh = new THREE.Mesh( planeGeometry, planeMaterial );
+	
+	planeMesh.rotateX( -Math.PI / 2 );
+	planeMesh.translateZ( 10 );
+	
+	// Scene
+	scene.add( planeMesh );
+
 }
 
 function animate() {
@@ -150,12 +228,20 @@ function animate() {
 	
 	controls.update();
 	
+	if ( movePlane && planeMesh.position.y > -2.0 ) {
+	
+		planeMesh.translateZ( -0.005 );
+	
+	}
+	
 	render();
 
 }
 
 function render() {
 
+	// Particle system
+	
 	var delta = clock.getDelta() * spawnerOptions.timeScale;
 
 	tick += delta;
@@ -167,6 +253,11 @@ function render() {
 	}
 	
 	particleSystem.update( tick );
+	
+	// Timer
+	timer += 0.05;
+	
+	planeMesh.material.uniforms.timer.value = timer;
 
 	renderer.render( scene, camera );
 
