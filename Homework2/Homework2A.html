@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Homework1B</title>
+		<title>Homework2A</title>
 		<meta charset="utf-8">
 		<style>
 			body {
@@ -15,6 +15,7 @@
 <div id="container"></div>
 
 <script src="js/three.js"></script>
+<script src="js/dat.gui.min.js"></script>
 <script src="js/OrbitControls.js"></script>
 
 <!-- Terrain shaders -->
@@ -22,15 +23,21 @@
 <script id="terrainVS" type="x-shader/x-vertex">
 
 uniform mat4 projectionMatrix;
-uniform mat4 modelViewMatrix;
+uniform mat4 viewMatrix;
+uniform mat4 modelMatrix;
 
 uniform sampler2D heightmap;
+
+uniform vec3 cameraPos; // Reflection looks different with different camera positions.
 
 attribute vec3 position;
 attribute vec2 uv;
 attribute vec3 normal;
 
 varying vec2 vUv;
+
+varying vec3 vIncidence;
+varying vec3 vWorldNormal;
 
 void main() {
 
@@ -44,8 +51,16 @@ void main() {
 	// Extrude along the normal.
 	vec3 displacedPos = position + normal * height;
 
-	gl_Position = projectionMatrix * modelViewMatrix * vec4( displacedPos, 1.0 );
-
+	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4( displacedPos, 1.0 );
+	
+	// Reflection
+	
+	vec4 worldPos = modelMatrix * vec4( displacedPos, 1.0 );
+	
+	vIncidence = worldPos.xyz - cameraPos;
+	
+	vWorldNormal = normalize( mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz ) * normal );
+	
 }
 
 </script>
@@ -56,9 +71,28 @@ precision mediump float;
 
 uniform sampler2D heightmap;
 
+uniform samplerCube cubemap;
+
 varying vec2 vUv;
 
+varying vec3 vIncidence;
+varying vec3 vWorldNormal;
+
 void main() {
+
+	if ( vUv.x < 0.05 || vUv.x > 0.95 || vUv.y < 0.05 || vUv.y > 0.95 ) {
+	
+		vec4 waterColor = vec4( 0.02, 0.6, 0.9, 1.0 );
+		
+		// Reflection
+		vec3 reflection = reflect( vIncidence, vWorldNormal );
+		vec4 reflectionColor = textureCube( cubemap, vec3( reflection.x, -reflection.y, -reflection.z ) );
+		
+		gl_FragColor = mix( waterColor, reflectionColor, 0.5 );
+	
+		return;
+	
+	}
 
 	gl_FragColor = texture2D( heightmap,vUv );
 
@@ -107,7 +141,7 @@ void main() {
 
 <script>
 
-// Essentials
+// Essential elements
 
 var container;
 
@@ -118,10 +152,20 @@ var terrainFS = document.getElementById( "terrainFS" ).textContent;
 var skyVS = document.getElementById( "skyVS" ).textContent;
 var skyFS = document.getElementById( "skyFS" ).textContent;
 
-// Scene elements
+// Orbit control
+var controls;
 
-var mesh;
-var material;
+// Shared cubemap
+var cubemapTexture = new THREE.CubeTextureLoader().setPath( "./Cubemaps/" ).load(  [
+	
+	'posx.jpg',
+	'negx.jpg',
+	'posy.jpg',
+	'negy.jpg',
+	'posz.jpg',
+	'negz.jpg'
+	
+]  )
 
 init();
 animate();
@@ -133,7 +177,6 @@ function init() {
 	container = document.getElementById( "container" );
 	
 	camera = new THREE.PerspectiveCamera( 60.0, window.innerWidth / window.innerHeight, 0.1, 2000 );
-	camera.position.z = 5;
 	
 	scene = new THREE.Scene();
 	
@@ -143,8 +186,26 @@ function init() {
 	container.appendChild( renderer.domElement );
 	
 	// Orbit control
-	var controls = new THREE.OrbitControls( camera );
+	
+	controls = new THREE.OrbitControls( camera );
+	
+	camera.position.set( 0.0, 0.0, 5.0 );
+	
 	controls.update();
+	
+	// GUI
+	
+	var gui = new dat.GUI( { width: 350 } );
+	
+	var options = {
+	
+		speed: 0.5
+	
+	}
+	
+	gui.add( options, "speed", 0, 1 );
+	
+	// Add objects to the scene.
 	
 	addTerrain();
 	
@@ -166,7 +227,10 @@ function addTerrain()  {
 	
 		uniforms: {
 		
+			cameraPos: { type: "vec3", value: camera.position },
+		
 			heightmap: { type: 't', value: heightmapTexture },
+			cubemap: { type: 't', value: cubemapTexture }
 		
 		},
 		
@@ -181,6 +245,10 @@ function addTerrain()  {
 	terrainMesh.material.side = THREE.DoubleSide;
 	
 	scene.add( terrainMesh );
+	
+	terrainMesh.rotateX( -Math.PI / 2 );
+	terrainMesh.translateZ( -2.0 );
+	terrainMesh.translateY( 1.0 );
 
 }
 
@@ -191,17 +259,6 @@ function addSky() {
 	var skyGeometry = new THREE.BoxGeometry( 2000, 2000, 2000 );
 	
 	// Material
-	
-	var cubemapTexture = new THREE.CubeTextureLoader().setPath( "./Cubemaps/" ).load(  [
-	
-		'posx.jpg',
-		'negx.jpg',
-		'posy.jpg',
-		'negy.jpg',
-		'posz.jpg',
-		'negz.jpg'
-	
-	]  )
 	
 	var skyMaterial = new THREE.RawShaderMaterial(  {
 	
@@ -231,11 +288,17 @@ function animate() {
 
 	requestAnimationFrame( animate );
 	
+	controls.update();
+	
 	render();
 
 }
 
 function render() {
+
+	// Update camera's position for the terrain object.
+	var terrainObj = scene.children[1];
+	terrainObj.material.uniforms.cameraPos = camera.position;
 
 	renderer.render( scene, camera );
 
