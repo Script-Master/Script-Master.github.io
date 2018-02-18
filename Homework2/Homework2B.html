@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Homework</title>
+		<meta charset="utf-8">
+		<style>
+			body {
+			  	margin: 0px;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+<body>
+
+<div id="container"></div>
+
+<script src="js/three.js"></script>
+<script src="js/OrbitControls.js"></script>
+<script src="js/dat.gui.min.js"></script>
+<script src="js/GPUParticleSystem.js"></script>
+
+<script id="terrainVS" type="x-shader/x-vertex">
+
+uniform mat4 projectionMatrix;
+uniform mat4 modelViewMatrix;
+
+attribute vec3 position;
+
+void main() {
+
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+}
+
+</script>
+
+<script id="terrainFS" type="x-shader/x-fragment">
+
+precision mediump float;
+
+void main() {
+
+	
+
+}
+
+</script>
+
+<script>
+
+// Essentials
+
+var container;
+
+var camera, scene, renderer;
+
+var terrainVS = document.getElementById( "terrainVS" ).textContent;
+var terrainFS = document.getElementById( "terrainFS" ).textContent;
+
+// Scene elements
+
+// Orbit controls
+var controls;
+
+// Particle system
+
+var particleSystem;
+var options, spawnerOptions;
+
+var clock = new THREE.Clock();
+var tick = 0;
+
+init();
+animate();
+
+function init() {
+
+	// Essentials
+
+	container = document.getElementById( "container" );
+	
+	camera = new THREE.PerspectiveCamera( 60.0, window.innerWidth / window.innerHeight, 0.1, 300);
+	camera.position.z = 5;
+	
+	scene = new THREE.Scene();
+	
+	renderer = new THREE.WebGLRenderer();
+	renderer.setClearColor( 0x003366 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	container.appendChild( renderer.domElement );
+	
+	// Orbit controls
+	controls = new THREE.OrbitControls( camera );
+	controls.update();
+
+	// Particle system
+	
+	particleSystem = new THREE.GPUParticleSystem(  {
+		maxParticles: 250000
+	}  );
+	
+	options = {
+		position: new THREE.Vector3(),
+		positionRandomness: 3,
+		velocity: new THREE.Vector3(),
+		velocityRandomness: 3,
+		color: 0xff0505,
+		colorRandomness: 0.2,
+		turbulence: 0.1,
+		lifetime: 10,
+		size: 20,
+		sizeRandomness: 1
+	};
+	
+	spawnerOptions = {
+		spawnRate: 18000,
+		horizontalSpeed: 1.5,
+		verticalSpeed: 1.33,
+		timeScale: 1
+	};
+	
+	particleSystem.translateZ( -15.0 );
+	
+	scene.add( particleSystem );
+	
+	// GUI options
+	
+	var gui = new dat.GUI( { width: 360 } );
+	
+	/*gui.add( options, "velocityRandomness", 0, 3 );
+	gui.add( options, "positionRandomness", 0, 3 );
+	gui.add( options, "size", 1, 20 );
+	gui.add( options, "sizeRandomness", 0, 25 );
+	gui.add( options, "colorRandomness", 0, 1 );
+	gui.add( options, "lifetime", 0.1, 10 );
+	gui.add( options, "turbulence", 0, 1 );
+
+	gui.add( spawnerOptions, "spawnRate", 10, 30000 );
+	gui.add( spawnerOptions, "timeScale", -1, 1 );*/
+	
+	// Add a button to trigger the explosion.
+	var button = { trigger:function() { spawnerOptions.spawnRate = 0; } }
+	gui.add( button, "trigger" ).name( "Trigger" );
+	
+}
+
+function animate() {
+
+	requestAnimationFrame( animate );
+	
+	controls.update();
+	
+	render();
+
+}
+
+function render() {
+
+	var delta = clock.getDelta() * spawnerOptions.timeScale;
+
+	tick += delta;
+
+	for ( var i = 0; i < spawnerOptions.spawnRate; i++ ) {
+
+		particleSystem.spawnParticle( options );
+		
+	}
+	
+	particleSystem.update( tick );
+
+	renderer.render( scene, camera );
+
+}
+
+</script>
+
+</body>
+</html>
