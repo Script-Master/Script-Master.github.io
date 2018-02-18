@@ -15,8 +15,9 @@
 <div id="container"></div>
 
 <script src="js/three.js"></script>
-<script src="js/dat.gui.min.js"></script>
 <script src="js/OrbitControls.js"></script>
+<script src="js/dat.gui.min.js"></script>
+<script src="js/OBJLoader.js"></script>
 
 <!-- Terrain shaders -->
 
@@ -29,6 +30,8 @@ uniform mat4 modelMatrix;
 uniform sampler2D heightmap;
 
 uniform vec3 cameraPos; // Reflection looks different with different camera positions.
+
+uniform float timer;
 
 attribute vec3 position;
 attribute vec2 uv;
@@ -49,8 +52,16 @@ void main() {
 	float height = ( texture2D( heightmap, uv ).r + texture2D( heightmap, uv ).g + texture2D( heightmap, uv ).b ) / 3.0;
 	
 	// Extrude along the normal.
-	vec3 displacedPos = position + normal * height;
-
+	
+	vec3 displacedPos =  vec3( 0.0, 0.0, 0.0 );
+	
+	if ( vUv.x < 0.05 || vUv.x > 0.95 || vUv.y < 0.05 || vUv.y > 0.95 ) {
+		displacedPos = position + normal * height * ( ( sin( timer + 3.1415926 / 2.0 ) + 1.0 ) / 2.0 );
+	}
+	else {
+		displacedPos = position + normal * height * ( ( sin( timer ) + 1.0 ) / 2.0 );
+	}
+	
 	gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4( displacedPos, 1.0 );
 	
 	// Reflection
@@ -167,6 +178,15 @@ var cubemapTexture = new THREE.CubeTextureLoader().setPath( "./Cubemaps/" ).load
 	
 ]  )
 
+// Terrain mesh has to be global, for passing the timer's value.
+var terrainMesh;
+
+// Timer.
+var timer = 0.0;
+
+// GUI options
+var guiOptions;
+
 init();
 animate();
 
@@ -197,19 +217,21 @@ function init() {
 	
 	var gui = new dat.GUI( { width: 350 } );
 	
-	var options = {
+	guiOptions = {
 	
-		speed: 0.5
+		tortureSpeed: 0.05
 	
 	}
 	
-	gui.add( options, "speed", 0, 1 );
+	gui.add( guiOptions, "tortureSpeed", 0.05, 0.1 ).name( "Mysterious Slider" );
 	
 	// Add objects to the scene.
 	
 	addTerrain();
 	
 	addSky();
+	
+	addMan();
 	
 }
 
@@ -228,6 +250,8 @@ function addTerrain()  {
 		uniforms: {
 		
 			cameraPos: { type: "vec3", value: camera.position },
+			
+			timer: { type: 'f', value: 0.0 },
 		
 			heightmap: { type: 't', value: heightmapTexture },
 			cubemap: { type: 't', value: cubemapTexture }
@@ -241,7 +265,7 @@ function addTerrain()  {
 	
 	// Mesh
 	
-	var terrainMesh = new THREE.Mesh( terrainGeometry, terrainMaterial );
+	terrainMesh = new THREE.Mesh( terrainGeometry, terrainMaterial );
 	terrainMesh.material.side = THREE.DoubleSide;
 	
 	scene.add( terrainMesh );
@@ -284,6 +308,31 @@ function addSky() {
 
 }
 
+function addMan() {
+
+	var objLoader = new THREE.OBJLoader();
+	objLoader.setPath( "./Models/" );
+	
+	objLoader.load( "Man.obj", function( manObj ) {
+
+		manObj.traverse( function ( child ) {
+			if ( child instanceof THREE.Mesh ) {
+				child.material = new THREE.MeshBasicMaterial( { color: 0x010101 } );
+			}
+		} );
+		
+		manObj.scale.set( 1.2, 1.2, 1.2 );
+		manObj.rotateX( -Math.PI / 2 );
+		manObj.translateX( -1.17 );
+		manObj.translateZ( -1.5);
+		manObj.translateY( -0.5 );
+		
+		scene.add( manObj );
+
+	} );
+
+}
+
 function animate() {
 
 	requestAnimationFrame( animate );
@@ -296,9 +345,21 @@ function animate() {
 
 function render() {
 
-	// Update camera's position for the terrain object.
+	// Update camera's position for the terrain object's reflection.
 	var terrainObj = scene.children[1];
 	terrainObj.material.uniforms.cameraPos = camera.position;
+	
+	// Get the man object.
+	var manObj = scene.children[2]
+	
+	// Update the timer only after the man object is loaded, for sync.
+	if ( manObj ) { timer += guiOptions.tortureSpeed; }
+	
+	// Update the terrain's timer.
+	terrainMesh.material.uniforms.timer.value = timer;
+	
+	// Move the man.
+	if ( manObj ) { manObj.translateZ( Math.sin( timer + Math.PI / 2 )  / 60.0 ); }
 
 	renderer.render( scene, camera );
 
