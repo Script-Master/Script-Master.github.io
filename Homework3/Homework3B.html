@@ -5,131 +5,167 @@
 		<meta charset="utf-8">
 		<style>
 			body {
-				margin: 0px;
+			  	margin: 0px;
 				overflow: hidden;
 			}
 		</style>
 	</head>
-	<body>
+<body>
 
-	<div id="container"></div>
+<div id="container"></div>
 
-    <script src="js/three.js"></script>
+<script src="js/three.js"></script>
 
-    <script id="vertexShader" type="x-shader/x-vertex">
+<script id="VS" type="x-shader/x-vertex">
+
+uniform mat4 projectionMatrix;
+uniform mat4 modelViewMatrix;
+
+attribute vec3 position;
+
+void main() {
 	
-	uniform mat4 modelMatrix;
-	uniform mat4 viewMatrix;
-    uniform mat4 projectionMatrix;
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 	
-    attribute vec3 position;
-	attribute vec2 uv;
-	attribute vec3 normal;
+}
+
+</script>
+
+<script id="FS" type="x-shader/x-fragment">
+
+precision mediump float;
+
+float sphereSDF( vec3 center, float radius, vec3 p );
+
+uniform vec3 cameraPos;
+
+void main() {
 	
-    precision mediump float;
+	vec3 rayDirection = normalize( vec3( gl_FragCoord.x - cameraPos.x, gl_FragCoord.y - cameraPos.y, -10.0 ) );
 	
-	void main() {
+	// Define a sphere on the left.
+	vec3 sphereCenterPos = vec3( -2.0, 1.0, -3.0 );
+	float sphereRadius = 2.0;
+	
+	// Start ray-marching from the camera's position.
+	
+	vec3 p = cameraPos;
+	
+	float distToSphere = 0.0;
+	
+	for ( int i = 1; i <= 256; i++) {
+	
+		distToSphere = sphereSDF( sphereCenterPos, sphereRadius, p );
 		
-       	gl_Position = projectionMatrix  * viewMatrix * modelMatrix  * vec4( position, 1.0 );
+		// Hit
+		if ( distToSphere < 0.01 ) { break; }
+		
+		p += rayDirection * distToSphere;
 		
 	}
 	
-	</script>
-
-	<script id="fragmentShader" type="x-shader/x-fragment">
+	if ( distToSphere < 0.01 ) {
 	
-	precision mediump float;
+		gl_FragColor = vec4( 0.0, 1.0, 0.0, 1.0 );
+		
+	}
+	else {
 	
-	uniform vec2 u_resolution;
-	
-	void main() {
-	
-		gl_FragColor = vec4( 1.0, 0.0, 0.0, 1.0 );
+		gl_FragColor = vec4( 0.0, 0.0, 0.0, 1.0 );
 	
 	}
 	
-	</script>
+}
+
+float sphereSDF( vec3 center, float radius, vec3 p ) { // center: sphere center; p: current point in ray marching;
+
+	return ( length( p - center ) - radius );
+
+}
+
+</script>
+
+<script>
+
+// Essentials
+
+var container;
+
+var camera, scene, renderer;
+
+var VS = document.getElementById( "VS" ).textContent;
+var FS = document.getElementById( "FS" ).textContent;
+
+init();
+animate();
+
+function init() {
+
+	container = document.getElementById( "container" );
 	
-	<script>
+	// Camera
 	
-	var container;
+	camera = new THREE.OrthographicCamera( window.innerWidth / -2, window.innerWidth / 2, window.innerHeight / 2, window.innerHeight / -2, 0.1, 1000 );
 	
-	var camera, scene, renderer, mesh;
+	camera.position.z  = 10;
 	
-	var vs = document.getElementById( 'vertexShader' ).textContent;
-	var fs = document.getElementById( 'fragmentShader' ).textContent;
-
-	var mouseX = 0.0;
-	var mouseY = 0.0;
-
-	init();
-	animate();
-
-	function init() {
-		
-		container = document.getElementById( 'container' );
-		
-		var width = window.innerWidth;
-		var height = window.innerHeight;
-		
-		camera = new THREE.OrthographicCamera( width / -2, width / 2, height / 2, height / -2, 0.1, 1000 );
-		camera.position.z = 10;
-		
-		scene = new THREE.Scene();
-		
-		// geometry
-		
-		var planeGeometry = new THREE.PlaneGeometry( width, height, 1, 1 );
-		
-		// material
-		
-		var material = new THREE.RawShaderMaterial( {
-
-			uniforms: {
-			
-				u_resolution: { type: "v2", value: new THREE.Vector2(width, height) },
-				
-			},
-			
-			vertexShader: vs,
-			fragmentShader: fs
-
-		} );
-		
-		planeMesh = new THREE.Mesh( planeGeometry, material );
-		scene.add( planeMesh );
-		
-		renderer = new THREE.WebGLRenderer();
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		container.appendChild( renderer.domElement );
-		
-		window.addEventListener( 'resize', onWindowResize, true );
-		
-	}
-
-	function onWindowResize( event ) {
-		
-		camera.aspect = window.innerWidth / window.innerHeight;
-		camera.updateProjectionMatrix();
-		
-		renderer.setSize( window.innerWidth, window.innerHeight );
-		mesh.material.uniforms.u_resolution.value = new THREE.Vector2(window.innerWidth, window.innerHeight);
-		
-	}
+	// Scene
+	scene = new THREE.Scene();
 	
-
-	function animate() {
-
-		requestAnimationFrame( animate );
-		render();
-
-	}
-
-	function render() {
-
-		renderer.render( scene, camera );
+	// Renderer
 	
-	}
+	renderer = new THREE.WebGLRenderer();
+	renderer.setClearColor( 0x003366 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	container.appendChild( renderer.domElement );
 	
-	</script>
+	addPlane();
 	
+}
+
+function addPlane() {
+
+	// Geometry
+	
+	var planeGeometry = new THREE.PlaneGeometry( window.innerWidth, window.innerHeight, 1, 1 );
+	
+	// Material
+	
+	var planeMaterial = new THREE.RawShaderMaterial( {
+	
+		uniforms: {
+		
+			cameraPos: { type: "v3", value: camera.position }
+		
+		},
+		
+		vertexShader: VS,
+		fragmentShader: FS
+	
+	} );
+	
+	// Mesh
+	
+	var planeMesh = new THREE.Mesh( planeGeometry, planeMaterial );
+	scene.add( planeMesh );
+
+}
+
+function animate() {
+
+	requestAnimationFrame( animate );
+	
+	render();
+
+}
+
+function render() {
+
+	renderer.render( scene, camera );
+
+}
+
+</script>
+
+</body>
+</html>
