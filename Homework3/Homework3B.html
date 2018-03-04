@@ -35,13 +35,36 @@ void main() {
 
 precision mediump float;
 
+/* Function declaration */
+
+vec3 phongIllumination( vec3 p, vec3 cameraPos );
+vec3 lightContribution( vec3 p, vec3 cameraPos );
+
+vec3 estimateNormal( vec3 p );
+
 float sphereSDF( vec3 center, float radius, vec3 p );
+
+/* Constants */
+
+// Ray marching constants
+const int MAX_MARCHING_STEPS = 256;
+const float HIT_DIST = 0.01;
+
+// Material constants
+const float ka = 0.2; // Ambient reflection ratio
+const float kd = 0.7; // Diffuse reflectoin ratio
+const float ks = 1.0; // Specular reflection ratio
+const float specularity = 10.0;
+
+/* Uniforms */
 
 uniform vec2 resolution;
 
 void main() {
+
+	float fov = 90.0;
 	
-	vec3 rayDirection = normalize( vec3( gl_FragCoord.xy - resolution.xy / 2.0, -resolution.y / tan( radians( 45.0 ) ) / 2.0 ) );
+	vec3 rayDirection = normalize( vec3( gl_FragCoord.xy - resolution.xy / 2.0, -resolution.y / 2.0 / tan( radians( fov / 2.0 ) ) ) ); // resolution.y / 2.0 -> y, tan( fov / 2.0 ) -> y / z.
 	
 	// Define a sphere on the left.
 	vec3 sphereCenterPos = vec3( -2.0, 1.0, -3.0 );
@@ -49,34 +72,80 @@ void main() {
 	
 	// Start ray-marching from the camera's position.
 	
-	vec3 camera  = vec3( 0.0, 0.0, 5.0 );
+	vec3 cameraPos  = vec3( 0.0, 0.0, 5.0 );
 	
-	vec3 p = camera;
+	vec3 p = cameraPos;
 	
 	float distToSphere = 0.0;
 	
-	for ( int i = 1; i <= 256; i++) {
+	for ( int i = 1; i <= MAX_MARCHING_STEPS; i++) {
 	
 		distToSphere = sphereSDF( sphereCenterPos, sphereRadius, p );
 		
 		// Hit
-		if ( distToSphere < 0.01 ) { break; }
+		if ( distToSphere < HIT_DIST ) { break; }
 		
 		p += rayDirection * distToSphere;
 		
 	}
 	
-	if ( distToSphere < 0.01 ) {
+	// Hit something
+	if ( distToSphere < HIT_DIST ) {
 	
-		gl_FragColor = vec4( 0.0, 1.0, 0.0, 1.0 );
+		vec3 color = phongIllumination( p, cameraPos );
+	
+		gl_FragColor = vec4( color, 1.0 );
 		
 	}
-	else {
+	// Hit nothing
+	else { gl_FragColor = vec4( 0.0, 0.0, 0.0, 1.0 ); }
 	
-		gl_FragColor = vec4( 0.0, 0.0, 0.0, 1.0 );
+}
+
+vec3 phongIllumination( vec3 p, vec3 cameraPos ) {
+
+	vec3 color = vec3( 0.0, 0.0, 0.0 );
 	
-	}
+	// Ambient light
 	
+	vec3 ambientLight_color = vec3( 1.0, 1.0, 1.0 );
+	float ambientLight_intensity = 0.1;
+	
+	vec3 ambientColor = ambientLight_color * ambientLight_intensity;
+	color += ambientColor;
+	
+	// Light 1
+	
+	vec3 light1_pos = vec3( -3.0, 3.0, 0.0 );
+	float light1_intensity = 0.8;
+	vec3 light1_color = vec3( 1.0, 1.0, 1.0 ) * light1_intensity;
+
+	color +=
+	
+	return color;
+
+}
+
+vec3 lightContribution( vec3 lightPos, vec3 lightColor, vec3 p, vec3 cameraPos ) {
+	
+	vec3 normal = estimateNormal( p );
+	
+	vec3 L = normalize( lightPos - p );
+	
+	vec3 R = normalize( reflect( -L, normal ) );
+	
+	vec3 V = normalize( cameraPos - p );
+	
+	
+	
+	return color;
+
+}
+
+vec3 estimateNormal( vec3 p ) {
+
+
+
 }
 
 float sphereSDF( vec3 center, float radius, vec3 p ) { // center: sphere center; p: current point in ray marching;
