@@ -37,13 +37,24 @@ precision mediump float;
 
 /* Function declaration */
 
+// Lighitng
+
 vec3 phongIllumination( vec3 p, vec3 cameraPos );
 vec3 lightContribution( vec3 lightPos, vec3 lightColor, float lightIntensity, vec3 p, vec3 cameraPos );
 
+// Normal
+
 vec3 estimateNormal( vec3 p );
+
+// SDF
 
 float sceneSDF( vec3 p );
 float sphereSDF( vec3 center, float radius, vec3 p );
+float boxSDF( vec3 c, float lx, float ly, float lz, vec3 p );
+
+float intersectSDF( float distA, float distB );
+float unionSDF( float distA, float distB );
+float differenceSDF( float distA, float distB );
 
 /* Constants */
 
@@ -115,11 +126,19 @@ vec3 phongIllumination( vec3 p, vec3 cameraPos ) {
 	
 	// Light 1
 	
-	vec3 light1_pos = vec3( -3.0, 3.0, 0.0 );
+	vec3 light1_pos = vec3( -3.0, 3.0, -2.0 );
 	vec3 light1_color = vec3( 1.0, 1.0, 1.0 );
 	float light1_intensity = 0.8;
 
 	color += lightContribution( light1_pos, light1_color, light1_intensity, p, cameraPos );
+	
+	// Light 2
+	
+	vec3 light2_pos = vec3( 2.0, 1.0, 3.0 );
+	vec3 light2_color = vec3( 1.0, 0.6, 0.2 );
+	float light2_intensity = 0.8;
+	
+	color += lightContribution( light2_pos, light2_color, light2_intensity, p, cameraPos );
 	
 	return color;
 
@@ -170,17 +189,67 @@ vec3 estimateNormal( vec3 p ) {
 
 float sceneSDF( vec3 p ) {
 	
-	// Define a sphere on the left.
-	vec3 sphereCenterPos = vec3( -2.0, 1.0, -3.0 );
+	// Define a sphere.
+	vec3 sphereCenterPos = vec3( 0.0, -2.0, -3.0 );
 	float sphereRadius = 2.0;
 	
-	return sphereSDF( sphereCenterPos, sphereRadius, p );
+	// Define a box.
+	vec3 boxCenterPos = vec3( 0.0, 3.0, -3.0 );
+	float boxLengthX = 5.0;
+	float boxLengthY = 1.0;
+	float boxLengthZ = 4.0;
+	
+	float sphereDist = sphereSDF( sphereCenterPos, sphereRadius, p  );
+	float boxDist = boxSDF( boxCenterPos, boxLengthX, boxLengthY, boxLengthZ, p );
+
+	float minDist = min( sphereDist, boxDist );
+	
+	return minDist;
 	
 }
 
 float sphereSDF( vec3 center, float radius, vec3 p ) { // center: sphere center; p: current point in ray marching;
 
 	return ( length( p - center ) - radius );
+
+}
+
+// c - center, lx - length on X, p - current point on the ray
+float boxSDF( vec3 c, float lx, float ly, float lz, vec3 p ) {
+	
+	if ( ( p.x >= c.x - lx / 2.0 && p.x <= c.x + lx / 2.0 ) && ( p.y >= c.y - ly / 2.0 && p.y <= c.y + ly / 2.0 ) ) { return abs( c.z - p.z ) - lz / 2.0; }
+	if ( ( p.x >= c.x - lx / 2.0 && p.x <= c.x + lx / 2.0 ) && ( p.z >= c.z - lz / 2.0 && p.z <= c.z + lz / 2.0 ) ) { return abs( c.y - p.y ) - ly / 2.0; }
+	if ( ( p.y >= c.y - ly / 2.0 && p.y <= c.y + ly / 2.0 ) && ( p.z >= c.z - lz / 2.0 && p.z <= c.z + lz / 2.0 ) ) { return abs( c.x - p.x ) - lx / 2.0; }
+	
+	if ( ( p.x <= c.x - lx / 2.0 || p.x >= c.x + lx / 2.0 ) && ( p.y <= c.y - ly / 2.0 || p.y >= c.y + ly / 2.0 ) && ( p.z >= c.z - lz / 2.0 && p.z <= c.z + lz / 2.0 ) ) {
+		return sqrt( pow( abs( c.x - p.x ) - lx / 2.0, 2.0 ) + pow( abs( c.y - p.y ) - ly / 2.0, 2.0 ) );
+	}
+	if ( ( p.x <= c.x - lx / 2.0 || p.x >= c.x + lx / 2.0 ) && ( p.z <= c.z- lz / 2.0 || p.z >= c.z + lz / 2.0 ) && ( p.y >= c.y - ly / 2.0 && p.y <= c.y + ly / 2.0 ) ) {
+		return sqrt( pow( abs( c.x - p.x ) - lx / 2.0, 2.0 ) + pow( abs( c.z - p.z ) - lz / 2.0, 2.0 ) );
+	}
+	if ( ( p.y <= c.y - ly / 2.0 || p.y >= c.y + ly / 2.0 ) && ( p.z <= c.z- lz / 2.0 || p.z >= c.z + lz / 2.0 ) && ( p.x >= c.x - lx / 2.0 && p.x <= c.x + lx / 2.0 ) ) {
+		return sqrt( pow( abs( c.y - p.y ) - ly / 2.0, 2.0 ) + pow( abs( c.z - p.z ) - lz / 2.0, 2.0 ) );
+	}
+	
+	return sqrt( pow( abs( c.x - p.x ) - lx / 2.0, 2.0 ) + pow( abs( c.y - p.y ) - ly / 2.0, 2.0 ) + pow( abs( c.z - p.z ) - lz / 2.0, 2.0 ) );
+	
+}
+
+float intersectSDF( float distA, float distB ) {
+
+	return max( distA, distB );
+
+}
+
+float unionSDF( float distA, float distB ) {
+
+	return min( distA, distB );
+
+}
+
+float differenceSDF( float distA, float distB ) {
+
+	return max( distA, -distB );
 
 }
 
