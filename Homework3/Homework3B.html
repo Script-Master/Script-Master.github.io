@@ -74,6 +74,8 @@ const float specularity = 10.0;
 
 uniform vec2 resolution;
 
+uniform float timer;
+
 void main() {
 
 	float fov = 90.0;
@@ -82,7 +84,7 @@ void main() {
 	
 	// Start ray-marching from the camera's position.
 	
-	vec3 cameraPos  = vec3( 0.0, 0.0, 5.0 );
+	vec3 cameraPos  = vec3( 0.0, 2.0, 5.0 );
 	
 	vec3 p = cameraPos;
 	
@@ -190,21 +192,33 @@ vec3 estimateNormal( vec3 p ) {
 float sceneSDF( vec3 p ) {
 	
 	// Define a sphere.
-	vec3 sphereCenterPos = vec3( 0.0, -2.0, -3.0 );
+	vec3 sphereCenterPos = vec3( 0.0, -1.0, -3.0 );
 	float sphereRadius = 2.0;
+	float sphereDist = sphereSDF( sphereCenterPos, sphereRadius, p  );
+	
+	float timerOffset = ( cos( timer ) - 1.0 ) / 2.0 * 6.0;
 	
 	// Define a box.
-	vec3 boxCenterPos = vec3( 0.0, 3.0, -3.0 );
-	float boxLengthX = 5.0;
+	vec3 boxCenterPos = vec3( 0.0, 2.0 + timerOffset, -3.0 );
+	float boxLengthX = 10.0;
 	float boxLengthY = 1.0;
-	float boxLengthZ = 4.0;
-	
-	float sphereDist = sphereSDF( sphereCenterPos, sphereRadius, p  );
+	float boxLengthZ = 5.0;
 	float boxDist = boxSDF( boxCenterPos, boxLengthX, boxLengthY, boxLengthZ, p );
-
-	float minDist = min( sphereDist, boxDist );
 	
-	return minDist;
+	// Define the box's boolean boxes.
+	vec3 box1_CenterPos = vec3( -5.0, 2.0 + timerOffset, -3.0); float box1_lengthX = 2.0; float box1_lengthY = 2.0; float box1_lengthZ = 2.0;
+	float box1_Dist = boxSDF( box1_CenterPos, box1_lengthX, box1_lengthY, box1_lengthZ, p );
+	vec3 box2_CenterPos = vec3( 5.0, 2.0 + timerOffset, -3.0); float box2_lengthX = 2.0; float box2_lengthY = 2.0; float box2_lengthZ = 2.0;
+	float box2_Dist = boxSDF( box2_CenterPos, box2_lengthX, box2_lengthY, box2_lengthZ, p );
+	
+	// Boolean operations
+	boxDist = differenceSDF( boxDist, box1_Dist );
+	boxDist = differenceSDF( boxDist, box2_Dist );
+	boxDist = differenceSDF( boxDist, sphereDist);
+
+	//float minDist = min( sphereDist, boxDist );
+	
+	return boxDist;
 	
 }
 
@@ -266,6 +280,8 @@ var camera, scene, renderer;
 var VS = document.getElementById( "VS" ).textContent;
 var FS = document.getElementById( "FS" ).textContent;
 
+var planeMesh;
+
 init();
 animate();
 
@@ -305,7 +321,9 @@ function addPlane() {
 	
 		uniforms: {
 		
-			resolution: { type: "v2", value: new THREE.Vector2( window.innerWidth, window.innerHeight ) }
+			resolution: { type: "v2", value: new THREE.Vector2( window.innerWidth, window.innerHeight ) },
+			
+			timer: { type: 'f', value: 0.0 }
 		
 		},
 		
@@ -316,23 +334,25 @@ function addPlane() {
 	
 	// Mesh
 	
-	var planeMesh = new THREE.Mesh( planeGeometry, planeMaterial );
+	planeMesh = new THREE.Mesh( planeGeometry, planeMaterial );
 	scene.add( planeMesh );
-
+	
 }
 
 function animate() {
-
+	
 	requestAnimationFrame( animate );
 	
 	render();
-
+	
 }
 
 function render() {
-
+	
+	planeMesh.material.uniforms.timer.value += 0.01;
+	
 	renderer.render( scene, camera );
-
+	
 }
 
 </script>
